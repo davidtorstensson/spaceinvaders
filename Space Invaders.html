@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+	<title>Space Invaders</title>
+	<style>
+		* { padding: 0; margin: 0; }
+		canvas { background: #333; display: block, margin: 0 auto;}
+	</style>
+</head>
+<body>
+
+<p align="center">
+	<canvas id="myCanvas" width="640" height="480"></canvas>
+</p>
+
+<script>
+
+var canvas = document.getElementById("myCanvas");
+var context = canvas.getContext("2d");
+
+
+//Player definition
+const playerHeight = 50;
+const playerWidth = 50;
+const playerMargin = 10;
+var playerX = (canvas.width-playerWidth)/2;
+var playerY = canvas.height-playerHeight-playerMargin;
+var rightPressed = false;
+var leftPressed = false;
+var fire = false;
+var FIRE_COOLDOWN = 11;
+
+//Enemy behaviour
+/*
+var enemyRowCount = 3;
+var enemyColumnCount = 7;
+var enemyMovementX = 2;
+var enemyFireInterval = 50;
+var enemyFireIntervalMin = 10;
+var enemyFireSpeed = 5;
+*/
+
+
+//Enemy behaviour
+const minColumns=3;
+var maxColumns=6;
+const minRows=2;
+const maxRows=4;
+
+var enemyRowCount = 2;
+var enemyColumnCount = 3;
+var enemyMovementX = 1;
+var enemyFireInterval = 80;
+var enemyFireIntervalMin = 20;
+var enemyFireSpeed = 3;
+
+
+//Enemy definition
+const enemyWidth = 50;
+const enemyHeight = 40;
+const enemyPadding = 20;
+const enemyOffsetTop = 20;
+const enemyOffsetLeft = 10;
+var enemyCombinedWidth = (enemyWidth+enemyPadding)*enemyColumnCount;
+var enemyCurrentOffset = enemyOffsetLeft;
+var enemyFireCountDown=0;
+var fireTime=100;
+
+
+//Bullets
+const bulletWidth=3;
+const bulletHeight=20;
+var playerBullets = [];
+var enemyBullets = [];
+
+var enemies = [];
+var enemiesKilled = 0;
+var score = 0;
+var scoreMultiplier=1;
+
+//health
+var health = 2;
+const maxHealth = 3;
+const healthWidth=60;
+const healthHeight=8;
+const healthMargin=5;
+const healthMarginRight=10;
+
+var lvl = 1;
+var firstLoop=true;
+var cooldown = -1;
+var firing = false;
+
+addEnemies();
+
+document.addEventListener("keydown", keyDownHandler, false);
+document.addEventListener("keyup", keyUpHandler, false);
+
+function keyDownHandler(e) {
+	if (e.keyCode == 39) {			//Right arrow pressed
+		rightPressed = true;
+	}
+	else if (e.keyCode == 37) {		//Left arrow pressed
+		leftPressed = true;
+	}
+ 	else if (e.keyCode == 32){		//Space pressed
+		firing = true;		
+	} 
+}
+
+function keyUpHandler(e) {
+	if (e.keyCode == 39) {
+		rightPressed = false;
+	}
+	else if (e.keyCode == 37){
+		leftPressed = false;
+	}
+	else if (e.keyCode == 32){
+		firing=false;
+	}
+}
+
+function addEnemies(){
+	for(c=0; c<enemyColumnCount; c++) {
+		enemies[c] = []; 
+		for(r=0; r<enemyRowCount; r++) {
+			enemies[c][r] = { x: 0, y: 0, status:1};
+		}
+		
+		enemyCombinedWidth = (enemyWidth+enemyPadding)*enemyColumnCount;
+		enemyCurrentOffset = enemyOffsetLeft;
+		enemyFireCountDown=0;
+		fireTime=60;
+	}
+	
+}
+
+function addBullet(){
+	var bullet = {x:playerX+playerWidth/2-bulletWidth/2, y:playerY};
+	playerBullets.push(bullet);
+}
+
+function addEnemyBullet(){
+	var enemiesLeft = (enemyColumnCount*enemyRowCount)-enemiesKilled;
+	
+	var enemyToFire = Math.floor(Math.random()*enemiesLeft);
+	var count=0;
+	
+	for(c=0; c<enemyColumnCount; c++) {
+		for(r=0; r<enemyRowCount; r++) {
+			var enemy = enemies[c][r];
+			if(enemy.status == 1){
+				/* var distance = Math.abs(enemy.x - playerX);		//Heavy algorithm
+				var fireChance = Math.random()*distance;
+				if (fireChance<10){
+					enemy.status=0;
+					
+					return;
+				} */
+				
+				if(enemyToFire==count){								//Light algorithm
+					var bullet = {x:enemy.x+enemyWidth/2-bulletWidth/2, y:enemy.y+enemyHeight/1.5};
+					enemyBullets.push(bullet);
+				}
+				count++;
+			}
+		}
+	}
+}
+
+function drawPlayer() {
+	context.fillStyle = "#289EC6";
+
+	context.beginPath();
+	context.moveTo(playerX+12, playerY);
+	context.lineTo(playerX, playerY+30);
+	context.lineTo(playerX+12, playerY+50);
+    context.fill();
+    context.closePath();
+	
+	context.beginPath();
+	context.moveTo(playerX+playerWidth-12, playerY);
+	context.lineTo(playerX+playerWidth, playerY+30);
+	context.lineTo(playerX+playerWidth-12, playerY+50);
+    context.fill();
+    context.closePath();
+	
+	context.beginPath();
+	context.arc(playerX + playerWidth/2, playerY+playerHeight/1.6, 11, 0, Math.PI*2, false);
+	context.fill();
+	context.closePath();
+}
+
+function drawEnemy(x, y, width, height){
+	context.fillStyle = "#EF9C5B";
+	context.beginPath();
+	context.moveTo(x+12, y);
+	context.lineTo(x, y+20);
+	context.lineTo(x+12, y+50);
+    context.fill();
+    context.closePath();
+	
+	context.beginPath();
+	context.moveTo(x+width-12, y);
+	context.lineTo(x+width, y+20);
+	context.lineTo(x+width-12, y+50);
+    context.fill();
+    context.closePath();
+	
+	context.beginPath();
+	context.rect(x+width/2-10,y+height/4, 20, 20)
+	context.fill();
+    context.closePath();
+}
+
+function drawEnemies() {
+    for(c=0; c<enemyColumnCount; c++) {
+        for(r=0; r<enemyRowCount; r++) {
+			if (enemies[c][r].status == 1) {
+				var enemyX = (c*(enemyWidth+enemyPadding))+enemyCurrentOffset;
+				var enemyY = (r*(enemyHeight+enemyPadding))+enemyOffsetTop;
+				enemies[c][r].x = enemyX;
+				enemies[c][r].y = enemyY;
+				drawEnemy(enemyX,enemyY,enemyWidth,enemyHeight);
+				context.closePath();
+			}
+        }
+    }
+}
+
+function collisionDetection() {
+	for(i=playerBullets.length-1; i>=0; i--){
+		var bullet=playerBullets[i];
+		bullet.y-=7;
+		
+		if (bullet!=null&&playerBullets.length>0&&bullet.y<=-bulletHeight){
+			playerBullets.splice(i,1);
+			continue;
+		}
+		
+		for(c=0; c<enemyColumnCount; c++) {
+			for(r=0; r<enemyRowCount; r++) {
+				var enemy = enemies[c][r];
+				if(enemy.status == 1 && 
+				bullet.x + bulletWidth > enemy.x && 
+				bullet.x < enemy.x+enemyWidth && 
+				bullet.y > enemy.y && 
+				bullet.y < enemy.y+enemyHeight) {
+					enemy.status = 0;
+					playerBullets.splice(i,1);
+					enemiesKilled++;
+					score++;
+					
+				}
+			}
+		} 
+	}
+}
+	
+function collisionDetectionEnemy(){
+	for(i=enemyBullets.length-1; i>=0; i--){
+		var bullet=enemyBullets[i];
+		bullet.y+=enemyFireSpeed;
+		
+		if (bullet.y>=canvas.height){
+			enemyBullets.splice(i,1);
+			continue;
+		}
+		
+		if(bullet.x + bulletWidth > playerX && 
+		bullet.x < playerX+playerWidth && 
+		bullet.y + bulletHeight > playerY && 
+		bullet.y < playerY+playerHeight) {
+			enemyBullets.splice(i,1);
+			
+			if (health>0){
+				health-=1;
+				canvas.style.background = "red";
+				setInterval(function(){ canvas.style.background="#333"; }, 200);
+			}
+			else
+				gameOver();
+		}
+	}
+}
+
+function gameOver(){
+	alert("     Game Over\nYou scored " + score + " points");
+	document.location.reload();
+}
+
+function drawBullet(bullet){
+	context.beginPath();
+	context.rect(bullet.x, bullet.y, bulletWidth, bulletHeight);
+	context.fillStyle="#ff4c4c";
+	context.fill();
+	context.closePath();
+}
+
+function drawBullets(){
+	for (i=0; i<playerBullets.length; i++){
+		drawBullet(playerBullets[i]);
+	}
+	for (i=0; i<enemyBullets.length; i++){
+		drawBullet(enemyBullets[i]);
+	}
+}
+
+function drawHealthBar(pos){
+ 	context.beginPath()
+	context.rect(canvas.width - pos * (healthWidth + healthMargin), healthMargin, healthWidth, healthHeight);
+	context.fillStyle = "#289EC6";
+	context.fill();
+	context.closePath(); 
+}
+function drawHealth(){
+ 	for (i=0; i<health; i++){
+		drawHealthBar(i+1);
+	}
+}
+
+function drawText(){
+	context.fillStyle="#ff4c4c";
+	context.font = "16px Arial";
+	context.fillText("Score: " + score, 6,17);
+	context.fillText("Level " + lvl,6,32);
+	
+	context.font = "13px Arial";
+	context.fillStyle = "#289EC6";
+	context.fillText("Shields:", canvas.width - 245, 14);
+}
+
+function nextLevel(){
+	lvl++;
+	enemiesKilled=0;
+	playerBullets.length=0;
+	enemyBullets.length=0;
+	
+	for(c=0; c<enemyColumnCount; c++) {
+		enemies[c].length=0;
+		}
+	enemies.length=0;
+
+	if (enemyFireInterval>5&&enemyFireInterval>enemyFireIntervalMin)
+		enemyFireInterval--;
+	
+	if (enemyColumnCount<maxColumns)
+		enemyColumnCount++;
+	else{
+		enemyColumnCount=5;
+		maxColumns++;
+		enemyRowCount++;
+	}
+	
+	if ((lvl-1)%5==0){
+		if (enemyFireIntervalMin>0)
+			enemyFireIntervalMin-=2;
+	}
+	
+	if ((lvl-1)%10==0){
+		enemyColumnCount=3;
+		maxColumns=6;
+		enemyRowCount=2;
+		enemyFireSpeed+=0.5
+		
+		if(health<maxHealth)
+			health++;
+		
+		if (enemyMovementX<0)
+			enemyMovementX-=0.5;
+		else
+			enemyMovementX+=0.5;
+		
+		//if (enemyFireIntervalMin>0)
+			//enemyFireIntervalMin-=5;
+		
+		if (enemyFireInterval>10&&enemyFireInterval>enemyFireIntervalMin)
+			enemyFireInterval-=10;
+	}
+	
+	
+	addEnemies();
+}
+
+
+function draw() {
+	context.clearRect(0, 0, canvas.width, canvas.height);
+	
+	collisionDetection();
+	collisionDetectionEnemy();
+	drawPlayer();
+	drawEnemies();
+	drawBullets();
+	drawText();
+	drawHealth();
+	
+	if(rightPressed && playerX < canvas.width-playerWidth- playerMargin) {
+		playerX += 7;
+	}
+	else if(leftPressed && playerX > playerMargin) {
+		playerX -= 7;
+	}
+	
+	if(enemyCombinedWidth+enemyCurrentOffset>canvas.width+enemyOffsetLeft||enemyCurrentOffset<enemyOffsetLeft){
+		enemyMovementX = -enemyMovementX;
+	}
+	
+	if (enemyFireCountDown==fireTime)
+	{
+		addEnemyBullet();
+		enemyFireCountDown=0;
+		fireTime=enemiesKilled+Math.floor(Math.random()*(enemyFireInterval-enemyFireIntervalMin)+enemyFireIntervalMin);
+	}
+	
+	if (enemiesKilled>=enemyColumnCount*enemyRowCount){
+		nextLevel();
+	}
+
+	if (firing && cooldown == -1){
+		addBullet();
+		cooldown = 0;
+	}
+	
+	enemyCurrentOffset+= enemyMovementX;
+	enemyFireCountDown+=1;
+
+	if (cooldown >= 0)
+		cooldown++;
+	
+	if (cooldown > FIRE_COOLDOWN && cooldown != -1)
+		cooldown = -1;
+
+	if (firstLoop){
+		alert("Right/Left arrows: Steer ship\nSpace: Fire\n\nEnter: START");
+		firstLoop=false;
+		
+	}
+
+	console.log(cooldown);
+	
+	
+}
+setInterval(draw,10)
+
+</script>
+
+</body>
+</html>
+
